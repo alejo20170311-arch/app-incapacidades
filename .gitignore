@@ -5,5 +5,9 @@ release/
 *.sqlite-shm
 *.sqlite-wal
 data/*.bak
+supabase-export/
+.env
+.env.local
+.env.*.local
 npm-debug.log*
 .DS_Store
