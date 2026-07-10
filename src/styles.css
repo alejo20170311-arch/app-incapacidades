@@ -48,6 +48,43 @@ button:disabled {
   min-height: 100vh;
 }
 
+.login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #eef3ff 0%, #ffffff 48%, #edf7f3 100%);
+}
+
+.login-panel {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 18px;
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.login-panel img {
+  width: 150px;
+  height: 62px;
+  object-fit: contain;
+  object-position: left center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--primary);
+}
+
+.login-panel .eyebrow {
+  font-size: 26px;
+}
+
+.login-panel .primary {
+  width: 100%;
+}
+
 .sidebar {
   background: var(--sidebar);
   color: #ffffff;

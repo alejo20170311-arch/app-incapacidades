@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  LogOut,
   UserRound,
   WalletCards
 } from "lucide-react";
@@ -68,6 +69,8 @@ const IMPORT_TEMPLATE_HEADERS = [
 
 function App() {
   const [view, setView] = useState("dashboard");
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(!api.authRequired());
   const [cases, setCases] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [catalogs, setCatalogs] = useState({ eps: [], state: [], responsible: [] });
@@ -82,12 +85,39 @@ function App() {
   }, []);
 
   useEffect(() => {
-    refreshAll();
+    if (!api.authRequired()) return;
+    let mounted = true;
+    api
+      .getSession()
+      .then((currentSession) => {
+        if (!mounted) return;
+        setSession(currentSession);
+        setAuthReady(true);
+      })
+      .catch((error) => {
+        if (!mounted) return;
+        setToast(cleanError(error));
+        setAuthReady(true);
+      });
+    const unsubscribe = api.onAuthStateChange((nextSession) => {
+      setSession(nextSession);
+      setAuthReady(true);
+    });
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
+    if (!authReady || (api.authRequired() && !session)) return;
+    refreshAll();
+  }, [authReady, session]);
+
+  useEffect(() => {
+    if (!authReady || (api.authRequired() && !session)) return;
     loadCases();
-  }, [filters]);
+  }, [filters, authReady, session]);
 
   useEffect(() => {
     if (selectedId) loadSelected(selectedId);
@@ -95,6 +125,25 @@ function App() {
 
   async function refreshAll() {
     await Promise.all([loadCases(), loadDashboard(), loadCatalogs()]);
+  }
+
+  async function handleLogin(email, password) {
+    try {
+      const nextSession = await api.signIn(email, password);
+      setSession(nextSession);
+      setToast("");
+    } catch (error) {
+      setToast(cleanError(error));
+    }
+  }
+
+  async function handleLogout() {
+    await api.signOut();
+    setSession(null);
+    setCases([]);
+    setDashboard(null);
+    setSelected(null);
+    setSelectedId(null);
   }
 
   async function loadCases() {
@@ -179,6 +228,21 @@ function App() {
     return result;
   }
 
+  if (!authReady) return <LoadingScreen />;
+
+  if (api.authRequired() && !session) {
+    return (
+      <>
+        <LoginView onLogin={handleLogin} />
+        {toast && (
+          <button className="toast" onClick={() => setToast("")}>
+            {toast}
+          </button>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="app-shell">
       <Sidebar view={view} setView={setView} />
@@ -201,6 +265,12 @@ function App() {
               <FileSpreadsheet size={18} />
               Importar BUK
             </button>
+            {api.authRequired() && (
+              <button className="secondary" onClick={handleLogout}>
+                <LogOut size={18} />
+                Salir
+              </button>
+            )}
           </div>
         </header>
 
@@ -258,6 +328,68 @@ function App() {
         )}
       </main>
     </div>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <main className="login-shell">
+      <div className="login-panel">
+        <img src={mslLogo} alt="MSL Group" />
+        <p>Cargando...</p>
+      </div>
+    </main>
+  );
+}
+
+function LoginView({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!email.trim() || !password) return;
+    setLoading(true);
+    try {
+      await onLogin(email.trim(), password);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="login-shell">
+      <form className="login-panel" onSubmit={submit}>
+        <img src={mslLogo} alt="MSL Group" />
+        <div>
+          <p className="eyebrow">Recobro de incapacidades</p>
+          <span className="subtitle">Gestion Humana</span>
+        </div>
+        <label>
+          Usuario
+          <input
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </label>
+        <label>
+          Clave
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <button className="primary" type="submit" disabled={loading}>
+          <UserRound size={18} />
+          {loading ? "Ingresando..." : "Ingresar"}
+        </button>
+      </form>
+    </main>
   );
 }
 

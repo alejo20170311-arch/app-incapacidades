@@ -858,6 +858,31 @@ function formatCurrency(value) {
 }
 
 export const api = {
+  authRequired() {
+    return useSupabase();
+  },
+  async getSession() {
+    if (!useSupabase()) return null;
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    return data.session;
+  },
+  onAuthStateChange(callback) {
+    if (!useSupabase()) return () => {};
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
+    return () => data.subscription.unsubscribe();
+  },
+  async signIn(email, password) {
+    if (!useSupabase()) return null;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data.session;
+  },
+  async signOut() {
+    if (!useSupabase()) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  },
   listCases(filters) {
     const native = electronApi();
     if (native) return native.listCases(filters);
