@@ -883,6 +883,11 @@ export const api = {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   },
+  async updatePassword(password) {
+    if (!useSupabase()) return;
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  },
   listCases(filters) {
     const native = electronApi();
     if (native) return native.listCases(filters);

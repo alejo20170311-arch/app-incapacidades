@@ -4,12 +4,14 @@ import {
   AlertTriangle,
   BarChart3,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
   Download,
   ExternalLink,
   FileSpreadsheet,
+  KeyRound,
   Plus,
   RefreshCw,
   Search,
@@ -78,6 +80,7 @@ function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState("");
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = "light";
@@ -144,6 +147,12 @@ function App() {
     setDashboard(null);
     setSelected(null);
     setSelectedId(null);
+  }
+
+  async function handleChangePassword(password) {
+    await api.updatePassword(password);
+    setPasswordModalOpen(false);
+    setToast("Clave actualizada.");
   }
 
   async function loadCases() {
@@ -266,13 +275,21 @@ function App() {
               Importar BUK
             </button>
             {api.authRequired() && (
-              <button className="secondary" onClick={handleLogout}>
-                <LogOut size={18} />
-                Salir
-              </button>
+              <AccountMenu
+                email={session?.user?.email || "Usuario"}
+                onChangePassword={() => setPasswordModalOpen(true)}
+                onLogout={handleLogout}
+              />
             )}
           </div>
         </header>
+
+        {passwordModalOpen && (
+          <PasswordModal
+            onCancel={() => setPasswordModalOpen(false)}
+            onSave={handleChangePassword}
+          />
+        )}
 
         {toast && (
           <button className="toast" onClick={() => setToast("")}>
@@ -329,6 +346,107 @@ function App() {
       </main>
     </div>
   );
+}
+
+function AccountMenu({ email, onChangePassword, onLogout }) {
+  const [open, setOpen] = useState(false);
+
+  function choose(action) {
+    setOpen(false);
+    action();
+  }
+
+  return (
+    <div className="account-menu">
+      <button className="account-trigger" onClick={() => setOpen((current) => !current)}>
+        <span className="account-avatar">
+          <UserRound size={20} />
+        </span>
+        <span className="account-copy">
+          <strong>{emailName(email)}</strong>
+          <small>{email}</small>
+        </span>
+        <ChevronDown size={16} />
+      </button>
+      {open && (
+        <div className="account-popover">
+          <button onClick={() => choose(onChangePassword)}>
+            <KeyRound size={17} />
+            Cambiar clave
+          </button>
+          <button onClick={() => choose(onLogout)}>
+            <LogOut size={17} />
+            Cerrar sesion
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PasswordModal({ onCancel, onSave }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    if (password.length < 8) {
+      setError("La clave debe tener minimo 8 caracteres.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Las claves no coinciden.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(password);
+    } catch (saveError) {
+      setError(cleanError(saveError));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <form className="password-modal" onSubmit={submit}>
+        <h2>Cambiar clave</h2>
+        <label>
+          Nueva clave
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <label>
+          Confirmar clave
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+          />
+        </label>
+        {error && <p className="form-error">{error}</p>}
+        <div className="modal-actions">
+          <button className="secondary" type="button" onClick={onCancel}>
+            Cancelar
+          </button>
+          <button className="primary" type="submit" disabled={saving}>
+            {saving ? "Guardando..." : "Guardar clave"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function emailName(email) {
+  return String(email || "Usuario").split("@")[0];
 }
 
 function LoadingScreen() {
