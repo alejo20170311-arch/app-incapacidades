@@ -81,6 +81,7 @@ function App() {
   const [selected, setSelected] = useState(null);
   const [toast, setToast] = useState("");
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [importModal, setImportModal] = useState(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = "light";
@@ -177,13 +178,9 @@ function App() {
   }
 
   async function handleImport() {
-    try {
-      const result = await api.importBuk();
-      if (result?.canceled) return;
-      setToast(`Importacion completa: ${result.inserted} nuevos, ${result.updated || 0} actualizados, ${result.skipped} omitidos.`);
+    const result = await runImportWithProgress("Importar incapacidades BUK", () => api.importBuk(), formatBukImportSummary);
+    if (result?.ok) {
       await refreshAll();
-    } catch (error) {
-      setToast(cleanError(error));
     }
   }
 
@@ -222,11 +219,11 @@ function App() {
   }
 
   async function importPayments() {
-    const result = await api.importPayments();
-    if (result?.canceled) return;
-    setToast(`Pagos importados: ${result.applied} aplicados, ${result.skipped} omitidos.`);
-    await refreshAll();
-    if (selectedId) await loadSelected(selectedId);
+    const result = await runImportWithProgress("Importar pagos aplicados", () => api.importPayments(), formatPaymentImportSummary);
+    if (result?.ok) {
+      await refreshAll();
+      if (selectedId) await loadSelected(selectedId);
+    }
   }
 
   async function applyManualPayments(payments) {
@@ -235,6 +232,62 @@ function App() {
     await refreshAll();
     if (selectedId) await loadSelected(selectedId);
     return result;
+  }
+
+  async function runImportWithProgress(title, action, formatSummary) {
+    const timers = [];
+    setImportModal({
+      title,
+      progress: 0,
+      status: "running",
+      message: "Selecciona el archivo de Excel.",
+      summary: "",
+      errors: [],
+      canClose: false
+    });
+    timers.push(setTimeout(() => setImportModal((current) => advanceImportModal(current, 20, "Leyendo archivo...")), 350));
+    timers.push(setTimeout(() => setImportModal((current) => advanceImportModal(current, 55, "Validando datos...")), 1100));
+    timers.push(setTimeout(() => setImportModal((current) => advanceImportModal(current, 82, "Guardando informacion...")), 2200));
+
+    try {
+      const result = await action();
+      timers.forEach(clearTimeout);
+      if (result?.canceled) {
+        setImportModal({
+          title,
+          progress: 100,
+          status: "warning",
+          message: "Importacion cancelada.",
+          summary: "No se realizaron cambios.",
+          errors: [],
+          canClose: true
+        });
+        return result;
+      }
+      const errors = normalizeImportErrors(result?.errors || []);
+      setImportModal({
+        title,
+        progress: 100,
+        status: errors.length ? "warning" : "success",
+        message: errors.length ? "Importacion terminada con observaciones." : "Importacion completada.",
+        summary: formatSummary(result),
+        errors,
+        canClose: true
+      });
+      return result;
+    } catch (error) {
+      timers.forEach(clearTimeout);
+      setImportModal({
+        title,
+        progress: 100,
+        status: "error",
+        message: "No se pudo completar la importacion.",
+        summary: "",
+        errors: normalizeImportErrors(error),
+        canClose: true
+      });
+      return null;
+    }
   }
 
   if (!authReady) return <LoadingScreen />;
@@ -288,6 +341,13 @@ function App() {
           <PasswordModal
             onCancel={() => setPasswordModalOpen(false)}
             onSave={handleChangePassword}
+          />
+        )}
+
+        {importModal && (
+          <ImportProgressModal
+            state={importModal}
+            onClose={() => setImportModal(null)}
           />
         )}
 
@@ -457,6 +517,52 @@ function LoadingScreen() {
         <p>Cargando...</p>
       </div>
     </main>
+  );
+}
+
+function ImportProgressModal({ state, onClose }) {
+  const statusLabel = {
+    running: "Procesando",
+    success: "Completado",
+    warning: "Con observaciones",
+    error: "Error"
+  }[state.status] || "Procesando";
+
+  return (
+    <div className="modal-backdrop">
+      <div className={`import-modal ${state.status}`}>
+        <div className="import-modal-header">
+          <div>
+            <h2>{state.title}</h2>
+            <span>{statusLabel}</span>
+          </div>
+          <strong>{state.progress}%</strong>
+        </div>
+        <div className="progress-track">
+          <div className="progress-fill" style={{ width: `${state.progress}%` }} />
+        </div>
+        <p className="import-message">{state.message}</p>
+        {state.summary && <p className="import-summary">{state.summary}</p>}
+        {state.errors?.length > 0 && (
+          <div className="import-errors">
+            <strong>Errores y observaciones</strong>
+            <ul>
+              {state.errors.map((error, index) => (
+                <li key={`${error.row || "general"}-${index}`}>
+                  {error.row ? `Fila ${error.row}: ` : ""}
+                  {error.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="modal-actions">
+          <button className="primary" onClick={onClose} disabled={!state.canClose}>
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1209,6 +1315,41 @@ function cleanError(error) {
     return parsed.error || text;
   } catch (_parseError) {
     return text.replace(/^Error:\s*/i, "");
+  }
+}
+
+function advanceImportModal(current, progress, message) {
+  if (!current || current.status !== "running") return current;
+  return {
+    ...current,
+    progress: Math.max(current.progress, progress),
+    message
+  };
+}
+
+function formatBukImportSummary(result = {}) {
+  return `Total: ${result.total || 0}. Nuevos: ${result.inserted || 0}. Actualizados: ${result.updated || 0}. Omitidos: ${result.skipped || 0}.`;
+}
+
+function formatPaymentImportSummary(result = {}) {
+  return `Nuevos: ${result.applied || 0}. Actualizados: ${result.updated || 0}. Omitidos: ${result.skipped || 0}.`;
+}
+
+function normalizeImportErrors(input) {
+  if (Array.isArray(input)) {
+    return input.map((item) => ({
+      row: item.row,
+      message: String(item.message || item.error || item)
+    }));
+  }
+
+  const text = String(input?.message || input || "No se pudo completar la importacion");
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed.errors)) return normalizeImportErrors(parsed.errors);
+    return [{ message: parsed.error || parsed.message || text }];
+  } catch (_parseError) {
+    return [{ message: text.replace(/^Error:\s*/i, "") }];
   }
 }
 

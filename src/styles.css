@@ -305,6 +305,99 @@ h2 {
   margin-bottom: 0;
 }
 
+.import-modal {
+  width: min(620px, 100%);
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 48px rgba(3, 8, 23, 0.22);
+  padding: 22px;
+}
+
+.import-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.import-modal-header h2 {
+  margin-bottom: 4px;
+}
+
+.import-modal-header span {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.import-modal-header strong {
+  color: var(--primary);
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.progress-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 260ms ease;
+}
+
+.import-modal.success .progress-fill {
+  background: var(--good);
+}
+
+.import-modal.warning .progress-fill {
+  background: #f59e0b;
+}
+
+.import-modal.error .progress-fill {
+  background: var(--danger);
+}
+
+.import-message,
+.import-summary {
+  margin: 0;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.import-summary {
+  color: var(--muted);
+}
+
+.import-errors {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7f7;
+  color: #7f1d1d;
+  padding: 14px;
+}
+
+.import-errors strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.import-errors ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .form-error {
   margin: 0;
   color: var(--danger);
