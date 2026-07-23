@@ -210,10 +210,14 @@ function App() {
   }
 
   async function saveCase(patch) {
-    await api.updateCase(selected.id, patch);
-    setToast("Incapacidad actualizada.");
-    await refreshAll();
-    await loadSelected(selected.id);
+    try {
+      await api.updateCase(selected.id, patch);
+      setToast("Incapacidad actualizada.");
+      await refreshAll();
+      await loadSelected(selected.id);
+    } catch (error) {
+      setToast(cleanError(error));
+    }
   }
 
   async function exportReport(extra = {}) {

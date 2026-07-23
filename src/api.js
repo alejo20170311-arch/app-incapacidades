@@ -612,9 +612,38 @@ function exportImportTemplate(filename) {
 }
 
 function normalizePatch(patch) {
+  const allowedFields = [
+    "employee_name",
+    "document",
+    "employee_code",
+    "salary",
+    "eps",
+    "area",
+    "position",
+    "incapacity_type",
+    "diagnosis",
+    "start_date",
+    "end_date",
+    "days",
+    "chargeable_days",
+    "buk_status",
+    "app_status",
+    "incapacity_number",
+    "support_url",
+    "filing_date",
+    "filing_number",
+    "responsible",
+    "expected_value",
+    "recognized_value",
+    "recovered_value",
+    "pending_value",
+    "observations",
+    "next_action_date",
+    "pending_documents"
+  ];
   const dateFields = ["start_date", "end_date", "filing_date", "next_action_date"];
   const numericFields = ["salary", "days", "chargeable_days", "expected_value", "recognized_value", "recovered_value", "pending_value"];
-  return Object.fromEntries(Object.entries(patch).map(([key, value]) => {
+  return Object.fromEntries(Object.entries(patch).filter(([key]) => allowedFields.includes(key)).map(([key, value]) => {
     if (dateFields.includes(key)) return [key, emptyToNull(value)];
     if (numericFields.includes(key)) return [key, Number(value || 0)];
     if (key === "eps") return [key, normalizeEntityName(value)];
