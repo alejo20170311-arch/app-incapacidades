@@ -4,7 +4,7 @@ const initSqlJs = require("sql.js");
 
 const DEFAULT_EPS = [
   "COOSALUD EPS-S",
-  "NUEVA EPS",
+  "Nueva EPS",
   "MUTUAL SER",
   "SALUD MIA",
   "ALIANSALUD EPS",
@@ -193,6 +193,7 @@ class Store {
 
   ensureCatalog(type, name) {
     if (!name) return;
+    name = normalizeCatalogName(type, name);
     const stmt = this.db.prepare("INSERT OR IGNORE INTO catalogs (type, name) VALUES (?, ?)");
     stmt.run([type, String(name).trim()]);
     stmt.free();
@@ -206,7 +207,7 @@ class Store {
   }
 
   saveCatalog(type, item) {
-    const name = String(item.name || "").trim();
+    const name = normalizeCatalogName(type, item.name);
     if (!name) throw new Error("El nombre es obligatorio");
     if (item.id) {
       this.run("UPDATE catalogs SET name = ?, active = ? WHERE id = ? AND type = ?", [
@@ -228,6 +229,7 @@ class Store {
   }
 
   insertCase(data) {
+    data.eps = normalizeEntityName(data.eps);
     this.ensureCatalog("eps", data.eps);
     if (data.responsible) this.ensureCatalog("responsible", data.responsible);
     const existing = this.one(
@@ -290,6 +292,7 @@ class Store {
   }
 
   updateImportedCase(existing, data) {
+    data.eps = normalizeEntityName(data.eps);
     const hasSalary = Number(data.salary || 0) > 0;
     const salary = hasSalary ? Number(data.salary || 0) : Number(existing.salary || 0);
     const chargeableDays = hasSalary ? Number(data.chargeable_days || 0) : Number(existing.chargeable_days || 0);
@@ -425,6 +428,7 @@ class Store {
     ];
     const keys = allowed.filter((key) => Object.prototype.hasOwnProperty.call(patch, key));
     if (!keys.length) return this.getCase(id);
+    if (patch.eps) patch.eps = normalizeEntityName(patch.eps);
     if (patch.eps) this.ensureCatalog("eps", patch.eps);
     if (patch.responsible) this.ensureCatalog("responsible", patch.responsible);
 
@@ -764,6 +768,17 @@ function normalizeText(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase();
+}
+
+function normalizeEntityName(value) {
+  const text = String(value || "").trim();
+  const key = normalizeText(text).replace(/\./g, "").replace(/\s+/g, " ");
+  if (key === "nueva eps") return "Nueva EPS";
+  return text;
+}
+
+function normalizeCatalogName(type, value) {
+  return type === "eps" ? normalizeEntityName(value) : String(value || "").trim();
 }
 
 function today() {

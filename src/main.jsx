@@ -82,6 +82,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [importModal, setImportModal] = useState(null);
+  const [entitiesNormalized, setEntitiesNormalized] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = "light";
@@ -115,8 +116,15 @@ function App() {
 
   useEffect(() => {
     if (!authReady || (api.authRequired() && !session)) return;
-    refreshAll();
-  }, [authReady, session]);
+    if (entitiesNormalized) {
+      refreshAll();
+      return;
+    }
+    api
+      .normalizeEntities()
+      .catch((error) => setToast(cleanError(error)))
+      .finally(() => setEntitiesNormalized(true));
+  }, [authReady, session, entitiesNormalized]);
 
   useEffect(() => {
     if (!authReady || (api.authRequired() && !session)) return;

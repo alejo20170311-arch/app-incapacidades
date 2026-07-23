@@ -55,6 +55,7 @@ const MINIMUM_WAGES = {
 };
 
 const INCAPACITY_RATE = 0.6667;
+const NUEVA_EPS_VARIANTS = ["Nueva E.P.S.", "NUEVA E.P.S.", "NUEVA EPS", "Nueva EPS"];
 
 function electronApi() {
   return window.recobro || null;
@@ -208,7 +209,7 @@ async function supabaseAddManagement(caseId, entry) {
 }
 
 async function supabaseSaveCatalog(type, item) {
-  const record = { type, name: String(item.name || "").trim(), active: item.active === false ? false : true };
+  const record = { type, name: normalizeCatalogName(type, item.name), active: item.active === false ? false : true };
   if (!record.name) throw new Error("El nombre es obligatorio");
   if (item.id) {
     const { error } = await supabase.from("catalogs").update(record).eq("id", item.id).eq("type", type);
@@ -224,6 +225,31 @@ async function supabaseDeleteCatalog(type, id) {
   const { error } = await supabase.from("catalogs").delete().eq("id", id).eq("type", type);
   if (error) throw error;
   return api.listCatalog(type);
+}
+
+async function supabaseNormalizeEntities() {
+  await ensureCatalog("eps", "Nueva EPS");
+  const { error: casesError } = await supabase
+    .from("cases")
+    .update({ eps: "Nueva EPS", updated_at: new Date().toISOString() })
+    .in("eps", NUEVA_EPS_VARIANTS);
+  if (casesError) throw casesError;
+
+  const { data: catalogs, error: catalogError } = await supabase
+    .from("catalogs")
+    .select("id,name")
+    .eq("type", "eps")
+    .in("name", NUEVA_EPS_VARIANTS);
+  if (catalogError) throw catalogError;
+
+  const duplicateIds = (catalogs || [])
+    .filter((item) => item.name !== "Nueva EPS")
+    .map((item) => item.id);
+  if (duplicateIds.length) {
+    const { error: deleteError } = await supabase.from("catalogs").delete().in("id", duplicateIds);
+    if (deleteError) throw deleteError;
+  }
+  return { ok: true, deletedCatalogs: duplicateIds.length };
 }
 
 async function supabaseApplyPayments(payments) {
@@ -443,6 +469,7 @@ async function upsertImportedCase(item) {
 }
 
 async function ensureCatalog(type, name) {
+  name = normalizeCatalogName(type, name);
   if (!name) return;
   const { error } = await supabase.from("catalogs").upsert(
     { type, name: String(name).trim(), active: true },
@@ -528,6 +555,7 @@ function normalizePatch(patch) {
   return Object.fromEntries(Object.entries(patch).map(([key, value]) => {
     if (dateFields.includes(key)) return [key, emptyToNull(value)];
     if (numericFields.includes(key)) return [key, Number(value || 0)];
+    if (key === "eps") return [key, normalizeEntityName(value)];
     if (key === "pending_documents") return [key, Boolean(value)];
     return [key, value ?? ""];
   }));
@@ -549,7 +577,7 @@ function normalizeCasePayload(item) {
     document: String(item.document || "").trim(),
     employee_code: item.employee_code || "",
     salary: Number(item.salary || 0),
-    eps: item.eps,
+    eps: normalizeEntityName(item.eps),
     area: item.area || "",
     position: item.position || "",
     incapacity_type: item.incapacity_type || "Sin tipo",
@@ -582,7 +610,7 @@ function normalizeBukRow(raw) {
     employee_name: clean(item.employee_name) || "Sin nombre",
     document: clean(item.document),
     employee_code: clean(item.employee_code),
-    eps: clean(item.eps),
+    eps: normalizeEntityName(item.eps),
     salary: parseMoney(item.salary),
     area: clean(item.area),
     position: clean(item.position),
@@ -779,6 +807,17 @@ function normalizeKey(value) {
     .toLowerCase();
 }
 
+function normalizeEntityName(value) {
+  const text = clean(value);
+  const key = normalizeKey(text).replace(/\./g, "").replace(/\s+/g, " ");
+  if (key === "nueva eps") return "Nueva EPS";
+  return text;
+}
+
+function normalizeCatalogName(type, value) {
+  return type === "eps" ? normalizeEntityName(value) : clean(value);
+}
+
 function clean(value) {
   if (value === null || value === undefined) return "";
   return String(value).trim();
@@ -887,6 +926,10 @@ export const api = {
     if (!useSupabase()) return;
     const { error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
+  },
+  async normalizeEntities() {
+    if (useSupabase()) return supabaseNormalizeEntities();
+    return { ok: true };
   },
   listCases(filters) {
     const native = electronApi();
