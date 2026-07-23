@@ -55,7 +55,59 @@ const MINIMUM_WAGES = {
 };
 
 const INCAPACITY_RATE = 0.6667;
-const NUEVA_EPS_VARIANTS = ["Nueva E.P.S.", "NUEVA E.P.S.", "NUEVA EPS", "Nueva EPS"];
+const ENTITY_CANONICAL_GROUPS = [
+  { canonical: "ALIANSALUD EPS", variants: ["ALIANSALUD", "ALIANSALUD EPS"] },
+  { canonical: "ARL SURA", variants: ["ARL", "ARL SURA", "ARL SURA (Accidentes de trabajo)"] },
+  { canonical: "CAPITAL SALUD", variants: ["CAPITAL SALUD", "CAPITAL SALUD EPS-S"] },
+  { canonical: "COMPENSAR", variants: ["COMPENSAR", "COMPENSAR EPS"] },
+  { canonical: "Nueva EPS", variants: ["Nueva E.P.S.", "NUEVA E.P.S.", "NUEVA EPS", "Nueva EPS"] },
+  { canonical: "SALUD TOTAL", variants: ["SALUD TOTAL", "SALUD TOTAL EPS S.A."] },
+  { canonical: "SANITAS", variants: ["EPS SANITAS", "SANITAS"] },
+  { canonical: "SERVICIO OCCIDENTAL DE SALUD EPS SOS", variants: ["SERV. OCCIDENTAL DE SALUD S.A.", "Servicio Occidental de Salud", "SERVICIO OCCIDENTAL DE SALUD EPS SOS"] },
+  { canonical: "SURA", variants: ["EPS SURA", "SURA"] }
+];
+
+const DEFAULT_ENTITY_NAMES = [
+  "ALIANSALUD EPS",
+  "ANAS WAYUU EPSI",
+  "ARL SURA",
+  "ASMET SALUD",
+  "ASOCIACION INDIGENA DEL CAUCA EPSI",
+  "CAJACOPI ATLANTICO",
+  "CAPITAL SALUD",
+  "CAPRESOCA",
+  "COLSUBSIDIO",
+  "COMFACHOCO",
+  "COMFAORIENTE",
+  "COMFENALCO VALLE",
+  "COMPENSAR",
+  "COOSALUD EPS-S",
+  "DUSAKAWI EPSI",
+  "EMSSANAR E.S.S.",
+  "EPM - EMPRESAS PUBLICAS DE MEDELLIN",
+  "EPS FAMILIAR DE COLOMBIA",
+  "FAMISANAR",
+  "FONDO DE PASIVO SOCIAL DE FERROCARRILES NACIONALES DE COLOMBIA",
+  "MALLAMAS EPSI",
+  "MUNDIAL DE SEGUROS",
+  "MUTUAL SER",
+  "Nueva EPS",
+  "PIJAOS SALUD EPSI",
+  "SALUD MIA",
+  "SALUD TOTAL",
+  "SANITAS",
+  "SAVIA SALUD EPS",
+  "SERVICIO OCCIDENTAL DE SALUD EPS SOS",
+  "SUBRED INTEGRADA DE SERVICIOS DE SALUD",
+  "SURA"
+];
+
+const ENTITY_CANONICAL_BY_KEY = ENTITY_CANONICAL_GROUPS.reduce((map, group) => {
+  group.variants.forEach((variant) => {
+    map.set(entityKey(variant), group.canonical);
+  });
+  return map;
+}, new Map());
 
 function electronApi() {
   return window.recobro || null;
@@ -228,28 +280,38 @@ async function supabaseDeleteCatalog(type, id) {
 }
 
 async function supabaseNormalizeEntities() {
-  await ensureCatalog("eps", "Nueva EPS");
-  const { error: casesError } = await supabase
-    .from("cases")
-    .update({ eps: "Nueva EPS", updated_at: new Date().toISOString() })
-    .in("eps", NUEVA_EPS_VARIANTS);
-  if (casesError) throw casesError;
-
-  const { data: catalogs, error: catalogError } = await supabase
-    .from("catalogs")
-    .select("id,name")
-    .eq("type", "eps")
-    .in("name", NUEVA_EPS_VARIANTS);
-  if (catalogError) throw catalogError;
-
-  const duplicateIds = (catalogs || [])
-    .filter((item) => item.name !== "Nueva EPS")
-    .map((item) => item.id);
-  if (duplicateIds.length) {
-    const { error: deleteError } = await supabase.from("catalogs").delete().in("id", duplicateIds);
-    if (deleteError) throw deleteError;
+  let deletedCatalogs = 0;
+  for (const name of DEFAULT_ENTITY_NAMES) {
+    await ensureCatalog("eps", name);
   }
-  return { ok: true, deletedCatalogs: duplicateIds.length };
+  for (const group of ENTITY_CANONICAL_GROUPS) {
+    await ensureCatalog("eps", group.canonical);
+    const variantsToUpdate = group.variants.filter((variant) => variant !== group.canonical);
+    if (variantsToUpdate.length) {
+      const { error: casesError } = await supabase
+        .from("cases")
+        .update({ eps: group.canonical, updated_at: new Date().toISOString() })
+        .in("eps", variantsToUpdate);
+      if (casesError) throw casesError;
+    }
+
+    const { data: catalogs, error: catalogError } = await supabase
+      .from("catalogs")
+      .select("id,name")
+      .eq("type", "eps")
+      .in("name", group.variants);
+    if (catalogError) throw catalogError;
+
+    const duplicateIds = (catalogs || [])
+      .filter((item) => item.name !== group.canonical)
+      .map((item) => item.id);
+    if (duplicateIds.length) {
+      const { error: deleteError } = await supabase.from("catalogs").delete().in("id", duplicateIds);
+      if (deleteError) throw deleteError;
+      deletedCatalogs += duplicateIds.length;
+    }
+  }
+  return { ok: true, deletedCatalogs };
 }
 
 async function supabaseApplyPayments(payments) {
@@ -539,7 +601,7 @@ function exportImportTemplate(filename) {
       "Novedades - Justificacion": "",
       "Novedades - Nombre Tipo": "Incapacidad",
       "Novedades - Tipo de": "Incapacidad",
-      EPS: "EPS SURA",
+      EPS: "SURA",
       Salario: 1800000
     }
   ];
@@ -807,10 +869,18 @@ function normalizeKey(value) {
     .toLowerCase();
 }
 
+function entityKey(value) {
+  return normalizeKey(value)
+    .replace(/&/g, " y ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function normalizeEntityName(value) {
   const text = clean(value);
-  const key = normalizeKey(text).replace(/\./g, "").replace(/\s+/g, " ");
-  if (key === "nueva eps") return "Nueva EPS";
+  const canonical = ENTITY_CANONICAL_BY_KEY.get(entityKey(text));
+  if (canonical) return canonical;
   return text;
 }
 

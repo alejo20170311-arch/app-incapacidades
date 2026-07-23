@@ -3,36 +3,58 @@ const path = require("path");
 const initSqlJs = require("sql.js");
 
 const DEFAULT_EPS = [
-  "COOSALUD EPS-S",
-  "Nueva EPS",
-  "MUTUAL SER",
-  "SALUD MIA",
   "ALIANSALUD EPS",
-  "SALUD TOTAL EPS S.A.",
-  "EPS SANITAS",
-  "EPS SURA",
-  "FAMISANAR",
-  "SERVICIO OCCIDENTAL DE SALUD EPS SOS",
-  "COMFENALCO VALLE",
-  "COMPENSAR EPS",
-  "EPM - EMPRESAS PUBLICAS DE MEDELLIN",
-  "FONDO DE PASIVO SOCIAL DE FERROCARRILES NACIONALES DE COLOMBIA",
+  "ANAS WAYUU EPSI",
+  "ARL SURA",
+  "ASMET SALUD",
+  "ASOCIACION INDIGENA DEL CAUCA EPSI",
   "CAJACOPI ATLANTICO",
+  "CAPITAL SALUD",
   "CAPRESOCA",
+  "COLSUBSIDIO",
   "COMFACHOCO",
   "COMFAORIENTE",
-  "EPS FAMILIAR DE COLOMBIA",
-  "ASMET SALUD",
-  "EMSSANAR E.S.S.",
-  "CAPITAL SALUD EPS-S",
-  "SAVIA SALUD EPS",
+  "COMFENALCO VALLE",
+  "COMPENSAR",
+  "COOSALUD EPS-S",
   "DUSAKAWI EPSI",
-  "ASOCIACION INDIGENA DEL CAUCA EPSI",
-  "ANAS WAYUU EPSI",
+  "EMSSANAR E.S.S.",
+  "EPM - EMPRESAS PUBLICAS DE MEDELLIN",
+  "EPS FAMILIAR DE COLOMBIA",
+  "FAMISANAR",
+  "FONDO DE PASIVO SOCIAL DE FERROCARRILES NACIONALES DE COLOMBIA",
   "MALLAMAS EPSI",
+  "MUNDIAL DE SEGUROS",
+  "MUTUAL SER",
+  "Nueva EPS",
   "PIJAOS SALUD EPSI",
-  "ARL SURA (Accidentes de trabajo)"
+  "SALUD MIA",
+  "SALUD TOTAL",
+  "SANITAS",
+  "SAVIA SALUD EPS",
+  "SERVICIO OCCIDENTAL DE SALUD EPS SOS",
+  "SUBRED INTEGRADA DE SERVICIOS DE SALUD",
+  "SURA"
 ];
+
+const ENTITY_CANONICAL_GROUPS = [
+  { canonical: "ALIANSALUD EPS", variants: ["ALIANSALUD", "ALIANSALUD EPS"] },
+  { canonical: "ARL SURA", variants: ["ARL", "ARL SURA", "ARL SURA (Accidentes de trabajo)"] },
+  { canonical: "CAPITAL SALUD", variants: ["CAPITAL SALUD", "CAPITAL SALUD EPS-S"] },
+  { canonical: "COMPENSAR", variants: ["COMPENSAR", "COMPENSAR EPS"] },
+  { canonical: "Nueva EPS", variants: ["Nueva E.P.S.", "NUEVA E.P.S.", "NUEVA EPS", "Nueva EPS"] },
+  { canonical: "SALUD TOTAL", variants: ["SALUD TOTAL", "SALUD TOTAL EPS S.A."] },
+  { canonical: "SANITAS", variants: ["EPS SANITAS", "SANITAS"] },
+  { canonical: "SERVICIO OCCIDENTAL DE SALUD EPS SOS", variants: ["SERV. OCCIDENTAL DE SALUD S.A.", "Servicio Occidental de Salud", "SERVICIO OCCIDENTAL DE SALUD EPS SOS"] },
+  { canonical: "SURA", variants: ["EPS SURA", "SURA"] }
+];
+
+const ENTITY_CANONICAL_BY_KEY = ENTITY_CANONICAL_GROUPS.reduce((map, group) => {
+  group.variants.forEach((variant) => {
+    map.set(entityKey(variant), group.canonical);
+  });
+  return map;
+}, new Map());
 
 const DEFAULT_STATES = [
   "Pendiente",
@@ -770,10 +792,18 @@ function normalizeText(value) {
     .toLowerCase();
 }
 
+function entityKey(value) {
+  return normalizeText(value)
+    .replace(/&/g, " y ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function normalizeEntityName(value) {
   const text = String(value || "").trim();
-  const key = normalizeText(text).replace(/\./g, "").replace(/\s+/g, " ");
-  if (key === "nueva eps") return "Nueva EPS";
+  const canonical = ENTITY_CANONICAL_BY_KEY.get(entityKey(text));
+  if (canonical) return canonical;
   return text;
 }
 

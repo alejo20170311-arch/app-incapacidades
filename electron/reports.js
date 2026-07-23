@@ -87,7 +87,7 @@ function exportImportTemplate(filePath, entities = []) {
       "Novedades - Justificacion": "",
       "Novedades - Nombre Tipo": "Incapacidad",
       "Novedades - Tipo de": "Incapacidad",
-      EPS: "EPS SURA",
+      EPS: "SURA",
       Salario: 1800000
     }
   ];
@@ -140,7 +140,7 @@ function exportPaymentTemplate(cases, filePath) {
 function appendEntitiesSheet(workbook, entities) {
   const rows = entities.length
     ? entities.map((item) => ({ Entidad: item.name || item }))
-    : [{ Entidad: "EPS SURA" }, { Entidad: "ARL SURA (Accidentes de trabajo)" }];
+    : [{ Entidad: "SURA" }, { Entidad: "ARL SURA" }];
   const sheet = XLSX.utils.json_to_sheet(rows, { header: ["Entidad"] });
   sheet["!autofilter"] = { ref: XLSX.utils.encode_range(XLSX.utils.decode_range(sheet["!ref"])) };
   sheet["!cols"] = [{ wch: 58 }];

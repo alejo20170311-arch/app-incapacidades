@@ -1289,7 +1289,7 @@ function downloadImportTemplateInBrowser() {
       "Novedades - Justificacion": "",
       "Novedades - Nombre Tipo": "Incapacidad",
       "Novedades - Tipo de": "Incapacidad",
-      EPS: "EPS SURA",
+      EPS: "SURA",
       Salario: 1800000
     }
   ];
